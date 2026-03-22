@@ -1,4 +1,4 @@
-# Viral News Bot 📰
+# urbanNews Bot 📰
 
 AI-powered news bot that fetches real news, scores virality, generates engaging posts,
 and publishes them automatically 3× per day. Zero cost, zero maintenance.
