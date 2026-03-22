@@ -1,0 +1,74 @@
+# .github/workflows/news_bot.yml
+#
+# Runs the viral news pipeline 3× per day.
+# Times tuned for Nepal timezone (UTC+5:45):
+#   • 08:00 NPT = 02:15 UTC
+#   • 13:30 NPT = 07:45 UTC
+#   • 20:00 NPT = 14:15 UTC
+#
+# GitHub Actions free tier: 2,000 min/month on Linux.
+# Each run takes ~5 min → 90 runs/month × 5 min = 450 min — well within limit.
+#
+# Required secrets (Settings → Secrets → Actions):
+#   TELEGRAM_BOT_TOKEN  — from @BotFather
+#   TELEGRAM_CHANNEL_ID — @your_channel or numeric chat id
+#   DISCORD_WEBHOOK_URL — from Server Settings → Integrations → Webhooks
+#   HF_TOKEN            — from huggingface.co/settings/tokens (write access)
+#   GUARDIAN_API_KEY    — from open-platform.theguardian.com (free)
+#   NYT_API_KEY         — from developer.nytimes.com (free, optional)
+#   HF_DATASET_REPO     — e.g. your-username/news-posts
+#   HF_USERNAME         — your HuggingFace username (for model repo)
+
+name: Viral News Bot
+
+on:
+  schedule:
+    - cron: '15 2 * * *'   # 08:00 Nepal time
+    - cron: '45 7 * * *'   # 13:30 Nepal time
+    - cron: '15 14 * * *'  # 20:00 Nepal time
+  workflow_dispatch:         # Manual trigger from GitHub UI
+
+jobs:
+  generate-and-post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run news pipeline
+        working-directory: ./app
+        env:
+          TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HF_TOKEN:            ${{ secrets.HF_TOKEN }}
+          HF_DATASET_REPO:     ${{ secrets.HF_DATASET_REPO }}
+          HF_USERNAME:         ${{ secrets.HF_USERNAME }}
+          GUARDIAN_API_KEY:    ${{ secrets.GUARDIAN_API_KEY }}
+          NYT_API_KEY:         ${{ secrets.NYT_API_KEY }}
+        run: python main.py --n 2
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-logs-${{ github.run_id }}
+          path: app/posts_history.json
+          if-no-files-found: ignore
